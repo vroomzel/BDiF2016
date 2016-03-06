@@ -38,6 +38,7 @@ public:
         }
 
         double Kurtosis() const {
+            // excess kurtosis. Should be zero for normal distribution
             return (n*M4) / (M2*M2) - 3;
         }
 

@@ -21,11 +21,12 @@ using namespace std;
 // then at most another third will be used for writing signal/noise and about a third will be left for processing
 const long IO_MEMORY = 500 * 1024 * 1024;
 const long APPROX_LINE_LENS=45;
+const long STD_THRESHOLD=2.7;
 
 //const long MAX_BYTES = sizeof(char)*MAX_LINES*45; //each line is around 41 characters long
 //
 
-void process_data(vector<Tick> &tick_data, RunningStat *retstat, vector<Tick *> &bad_ticks);
+void process_data(vector<Tick> &tick_data, RunningStat *pxstats, vector<Tick *> &bad_ticks);
 
 int main (int argc, char *argv[])
 {
@@ -92,7 +93,7 @@ int main (int argc, char *argv[])
     Timer read_t, parse_t, compute_t, write_t;
 
     // statistics calculators
-    RunningStat pxstats,retstats;
+    RunningStat pxstats;
 
     //total number of bad ticks
     unsigned long n_bad_ticks=0;
@@ -117,7 +118,8 @@ int main (int argc, char *argv[])
 
 		// scrub data
         compute_t.start();
-        process_data(data, &retstats, bad_ticks);
+        pxstats.Clear(); // since we don't look at consecutive data chunks, price after gaps can be very different
+        process_data(data, &pxstats, bad_ticks);
         n_bad_ticks+=bad_ticks.size();
         LOG(params,CALLED,MAIN,"process_data() has been called");
         compute_t.end();
@@ -149,17 +151,20 @@ int main (int argc, char *argv[])
             exit(0);
         }
 	}
-    LOG(params,DIAGNOSTIC,MAIN,to_string(mpi_rank)," num of good returns: ",to_string(retstats.NumDataValues()));
-    LOG(params,DIAGNOSTIC,MAIN,"mean: ",to_string(retstats.Mean()));
-    LOG(params,DIAGNOSTIC,MAIN,"std: ",to_string(retstats.StandardDeviation()));
+    LOG(params,DIAGNOSTIC,MAIN,to_string(mpi_rank)," num of good returns: ",to_string(pxstats.NumDataValues()));
+    LOG(params, DIAGNOSTIC, MAIN, "mean: ", to_string(pxstats.Mean()), " std: ", to_string(pxstats.StandardDeviation()));
+    LOG(params, DIAGNOSTIC, MAIN, "skewness: ", to_string(pxstats.Skewness()), " kurtosis: ", to_string(pxstats.Kurtosis()));
+    double excess_kurtosis= pxstats.Kurtosis();//if this very different from zero - distribution is not normal
     // calculate max time for each operation
-    double m_read_t,m_parse_t,m_compute_t,m_write_t;
+    double m_read_t,m_parse_t,m_compute_t,m_write_t,a_kurtosis;
     unsigned long t_n_bad_ticks;
     MPI_Reduce(&read_t.d_time,&m_read_t,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
     MPI_Reduce(&parse_t.d_time,&m_parse_t,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
     MPI_Reduce(&compute_t.d_time,&m_compute_t,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
     MPI_Reduce(&write_t.d_time,&m_write_t,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
     MPI_Reduce(&n_bad_ticks,&t_n_bad_ticks,1,MPI_UNSIGNED_LONG,MPI_SUM,0,MPI_COMM_WORLD);
+    MPI_Reduce(&excess_kurtosis,&a_kurtosis,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+    a_kurtosis/=mpi_size;
 
     // output to log
     if (mpi_rank==0){
@@ -168,6 +173,10 @@ int main (int argc, char *argv[])
         LOG(params,RESULT,MAIN,"Compute time: ",to_string(m_compute_t));
         LOG(params,RESULT,MAIN,"Write time: ",to_string(m_write_t));
         LOG(params,RESULT,MAIN,"Total # of bad ticks: ",to_string(t_n_bad_ticks));
+        // since each mpi process looks at approximately the same amount of data,
+        // we can simply average the numbers for running statistics like kurtosis (because delta~0)
+        LOG(params,RESULT,MAIN,"Excess Kurtosis: ");
+
     }
 
 	MPI_Finalize();
@@ -175,38 +184,28 @@ int main (int argc, char *argv[])
 	return 0;
 }
 
-void process_data(vector<Tick> &tick_data, RunningStat *retstat, vector<Tick *> &bad_ticks) {
+void process_data(vector<Tick> &tick_data, RunningStat *pxstats, vector<Tick *> &bad_ticks) {
     sort(tick_data.begin(),tick_data.end());
     // burn-in stage - push 10 first GOOD ticks just to initialize RunningStats counter
     int pos=0;
     do{
-        ++pos;
-        if (tick_data[pos].status==GOOD && tick_data[pos-1].status==GOOD){
-            retstat->Push((tick_data[pos].price/tick_data[pos-1].price-1));
+        if (tick_data[pos].status==GOOD ){
+            pxstats->Push(tick_data[pos].price );
         }
-    } while (retstat->NumDataValues()<10);
+        ++pos;
+    } while (pxstats->NumDataValues() < 10);
     // filtering against running online variance starts here
-    for (unsigned long t = pos+1; t < tick_data.size(); ++t) {
-//        cout<<"price: "<<tick_data[t].price<<" mean ret "<<retstat->Mean()<< " std "<<retstat->StandardDeviation()<<endl;
-        if (tick_data[t].status==GOOD) {
-            // tick is good based on its time. Check if price within the range
-            double ret = tick_data[t].price/tick_data[t-1].price-1;
-            if (fabs((ret-retstat->Mean())/retstat->StandardDeviation())<=2.13){
-                // tick is good - update online stats
-                retstat->Push(ret);
-            }
-            else{
-                // mark tick as bad
-                tick_data[t].status=BAD;
-//                cout<<"++++addit to bad_ticks "<<tick_data[t].toString()<<" ret: "<<ret<<endl;
-                bad_ticks.push_back(&tick_data[t]);
-            }
+    for (unsigned long t = pos; t < tick_data.size(); ++t) {
+//        cout<<"price: "<<tick_data[t].price<<" mean px "<<pxstats->Mean()<< " std "<<pxstats->StandardDeviation()<<endl;
+        if (tick_data[t].status==GOOD && fabs(tick_data[t].price-pxstats->Mean())/pxstats->StandardDeviation()<=STD_THRESHOLD) {
+            // tick is good, add it to running stats
+            pxstats->Push(tick_data[t].price);
         }
         else
         {
             // mark tick as bad
             tick_data[t].status=BAD;
-//            cout<<"++++addit to bad_ticks "<<tick_data[t].toString()<<endl;
+//            cout<<"++++adding to bad_ticks "<<tick_data[t].toString()<<endl;
             bad_ticks.push_back(&tick_data[t]);
         }
     }
