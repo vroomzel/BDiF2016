@@ -36,6 +36,7 @@ static string pModuleNameEnum[] = {"MAIN","MPI_IO","TICK","LOG","HELPER_FUNCTION
 void LOG(const Parameters &params, LogTypeEnum t, ModuleNameEnum m, string message);
 void LOG(const Parameters &params, LogTypeEnum t, ModuleNameEnum m, string message1, string message2);
 void LOG(const Parameters &params, LogTypeEnum t, ModuleNameEnum m, string message1, string message2, string message3);
+void LOG(const Parameters &params, LogTypeEnum t, ModuleNameEnum m, string message1, string message2, string message3, string message4);
 
 static clock_t start;
 string ElapsedTime();

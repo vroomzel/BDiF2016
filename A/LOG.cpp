@@ -60,6 +60,11 @@ void LOG(const Parameters &params, LogTypeEnum t, ModuleNameEnum m, string messa
     LOG(params, t, m, msg.str());
 }
 
+void LOG(const Parameters &params, LogTypeEnum t, ModuleNameEnum m, string message1, string message2, string message3,string message4) {
+	stringstream msg;
+	msg << message1 << message2 << message3 << message4;
+	LOG(params, t, m, msg.str());
+}
 string ElapsedTime()
 {
 	static int once = 0;
