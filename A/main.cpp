@@ -176,7 +176,7 @@ int main (int argc, char *argv[])
     LOG(params, DIAGNOSTIC, MAIN, "skewness: ", to_string(min_ret_stats.Skewness()), " kurtosis: ", to_string(min_ret_stats.Kurtosis()));
     double excess_kurtosis= min_ret_stats.Kurtosis();//if this very different from zero - distribution is not normal
     unsigned long n_min_samples=min_ret_stats.NumDataValues();
-    LOG(params,DIAGNOSTIC,MAIN,"# of 1 min smaples: ",to_string(n_min_samples));
+    LOG(params,DIAGNOSTIC,MAIN,"# of 1 min samples: ",to_string(n_min_samples));
     // calculate max time for each operation
     double m_read_t,m_parse_t,m_compute_t,m_write_t,a_kurtosis;
     unsigned long t_n_bad_ticks,t_n_good_ticks,t_n_min_samples;
@@ -232,7 +232,10 @@ void process_data(vector<Tick> &tick_data, RunningStat *pxstats, RunningStat *mR
     // filtering against running online variance starts here
     for (unsigned long t = pos; t < tick_data.size(); ++t) {
 //        cout<<"price: "<<tick_data[t].price<<" mean px "<<pxstats->Mean()<< " std "<<pxstats->StandardDeviation()<<endl;
-        if (tick_data[t].status==GOOD && fabs(tick_data[t].price-pxstats->Mean())/pxstats->StandardDeviation()<=std_threshold) {
+        if (tick_data[t].status==GOOD // initial status from parsing based on time, zero/negative price volume
+            && fabs(tick_data[t].price-pxstats->Mean())/pxstats->StandardDeviation()<=std_threshold // filter based on volatility of price
+                && (tick_data[t].volume!=tick_data[t-1].volume && tick_data[t].price!=tick_data[t-1].price && tick_data[t]!=tick_data[t-1])) // duplicate tick check
+        {
             // tick is good, add it to running stats
             pxstats->Push(tick_data[t].price);
             // check if you need to updates return sampling

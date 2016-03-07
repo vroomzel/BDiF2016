@@ -63,3 +63,7 @@ bool Tick::operator<(const Tick &other) const {
 bool Tick::operator==(const Tick &other) const {
     return (fabs(second-other.second)<5e-7) && (minute==other.minute) && (hour==other.hour) && (date==other.date);
 }
+
+bool Tick::operator!=(const Tick &other) const {
+    return !(this->operator==(other));
+}

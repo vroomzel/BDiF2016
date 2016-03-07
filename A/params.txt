@@ -1,8 +1,8 @@
 # Parameters for Scrub program
 
 # files
--data /home/alex/hgdev/gits/BDiF2016/A/data/signal.txt
 -input /home/alex/hgdev/gits/BDiF2016/A/data/data.txt
+-data /home/alex/hgdev/gits/BDiF2016/A/data/signal.txt
 -noise /home/alex/hgdev/gits/BDiF2016/A/data/noise.txt
 
 # Input/output memory available to the program in bites (#of Gb * 1024 *1024 *1024)

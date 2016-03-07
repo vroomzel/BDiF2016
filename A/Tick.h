@@ -45,6 +45,7 @@ public:
     //operator overloads
     bool operator < (const Tick&) const;
     bool operator == (const Tick&) const;
+    bool operator != (const Tick&) const;
 
 };
 
