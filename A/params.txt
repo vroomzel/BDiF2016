@@ -1,13 +1,21 @@
 # Parameters for Scrub program
 
-# files
--data /home/alex/hgdev/gits/BDiF2016/A/data/data1000k.txt
--signal /home/alex/hgdev/gits/BDiF2016/A/data/signal.txt
--noise /home/alex/hgdev/gits/BDiF2016/A/data/noise.txt
+# files for local Clion runs
+#-data /home/alex/hgdev/gits/BDiF2016/A/data/data1000k.txt
+#-signal /home/alex/hgdev/gits/BDiF2016/A/data/signal.txt
+#-noise /home/alex/hgdev/gits/BDiF2016/A/data/noise.txt
+
+# files for cluster run
+-data ./data/data10k.txt
+-signal ./data/signal.txt
+-noise ./data/noise.txt
 
 # Input/output memory available to the program in bites (#of Gb * 1024 *1024 *1024)
 # set it to about a third of total memory to be safe
--io_memory 2147483648
+#-io_memory 2147483648
+# for Penzias  - it has 19Gb free, limit usage to approximately 14Gb
+
+-io_memory 4509715660
 
 # acceptable price deviation (in standard deviations from the mean price)
 -price_std 3
