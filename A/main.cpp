@@ -26,8 +26,7 @@ const long APPROX_LINE_LENS=45;
 //const long MAX_BYTES = sizeof(char)*MAX_LINES*45; //each line is around 41 characters long
 //
 
-void process_data(vector<Tick> &tick_data, RunningStat *pxstats, RunningStat *mRstats, vector<Tick *> &bad_ticks,
-                  float std_threshold);
+void process_data(vector<Tick> &tick_data, RunningStat *pxstats, RunningStat *mRstats, float std_threshold);
 
 int main (int argc, char *argv[])
 {
@@ -41,8 +40,8 @@ int main (int argc, char *argv[])
 	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 
     // read all parameters
-    Parameters params; // logging parameters
-    string fname_input,fname_noise,fname_data; // file names
+    Parameters params; // logging parameters - not used here really
+    string fname_data,fname_noise, fname_signal; // file names
     unsigned long IO_MEMORY;
     float STD_THRESHOLD;
 
@@ -53,38 +52,47 @@ int main (int argc, char *argv[])
     {
         vector<string>datas=parse_string(line,' ');
         if (datas.empty()) continue;
-        if (datas[0]=="-data")
-            fname_data=datas[1];
+        if (datas[0]=="-signal")
+            fname_signal =datas[1];
         else if (datas[0]=="-noise")
             fname_noise=datas[1];
-        else if (datas[0]=="-input")
-            fname_input =datas[1];
+        else if (datas[0]=="-data")
+            fname_data =datas[1];
         else if (datas[0]=="-io_memory")
             IO_MEMORY=atoll(datas[1].c_str());
         else if (datas[0]=="-price_std")
             STD_THRESHOLD=atof(datas[1].c_str());
     }
     file.close();
-	// maximum memory each process can use
-	const unsigned long MAX_BYTES= IO_MEMORY / mpi_size/ sizeof(char);
 
 	// open data file
-	MPI_File in_data,out_noise;
-	int ierr=MPI_File_open(MPI_COMM_WORLD, const_cast<char*>(fname_input.c_str()), MPI_MODE_RDONLY, MPI_INFO_NULL, &in_data);
+	MPI_File in_data,out_noise,out_signal;
+	int ierr=MPI_File_open(MPI_COMM_WORLD, const_cast<char*>(fname_data.c_str()), MPI_MODE_RDONLY, MPI_INFO_NULL, &in_data);
 	if (ierr){
-		if (mpi_rank==0) cout << "Couldn't open file " << fname_input;
+		if (mpi_rank==0) cout << "Couldn't open file " << fname_data;
 		MPI_Finalize();
 		exit(0);
 	}
     //open noise file
     int oerr = MPI_File_open(MPI_COMM_WORLD,const_cast<char*>(fname_noise.c_str()),MPI_MODE_CREATE | MPI_MODE_WRONLY,MPI_INFO_NULL,&out_noise);
     if (oerr){
-        if (mpi_rank==0) cout<<"Couldn't open file noise.txt. Error code "<<oerr ;
+        if (mpi_rank==0) cout<<"Couldn't open file " <<fname_noise<<". Error code "<<oerr ;
         MPI_Finalize();
         exit(0);
     }
+    // open signals file
+    oerr = MPI_File_open(MPI_COMM_WORLD,const_cast<char*>(fname_signal.c_str()),MPI_MODE_CREATE | MPI_MODE_WRONLY,MPI_INFO_NULL,&out_signal);
+    if (oerr){
+        if (mpi_rank==0) cout<<"Couldn't open file " <<fname_signal<<". Error code "<<oerr ;
+        MPI_Finalize();
+        exit(0);
+    }
+
 	// figure out how many cycles you'll have to do to process entire file and what's the optimal buffer size to split
 	// the work approximately evenly between processes and cycles
+
+    // maximum memory each process can use
+    const unsigned long MAX_BYTES= IO_MEMORY / mpi_size/ sizeof(char); // integer division
 
 	MPI_Offset filesize;
 	MPI_File_get_size(in_data,&filesize);
@@ -116,7 +124,7 @@ int main (int argc, char *argv[])
     RunningStat pxstats,min_ret_stats;
 
     //total number of bad ticks
-    unsigned long n_bad_ticks=0, n_good_ticks=0;
+    unsigned long cum_n_bad_ticks =0, cum_n_good_ticks =0,n_bad_ticks,n_good_ticks;
 
 	//process data
 	for (long cycle=0;cycle<num_cycles;cycle++){
@@ -129,7 +137,6 @@ int main (int argc, char *argv[])
         LOG(params,CALLED,MAIN,"read_data() has been called");
 
         vector<Tick> data;
-        vector<Tick *> bad_ticks;
 		// parse data
         parse_t.start();
         parse_data(&data_start,&data_end,&data);
@@ -138,40 +145,52 @@ int main (int argc, char *argv[])
 
 		// scrub data
         compute_t.start();
-        process_data(data, &pxstats, &min_ret_stats, bad_ticks, STD_THRESHOLD);
-        n_bad_ticks+=bad_ticks.size();
-        n_good_ticks+=pxstats.NumDataValues();
+        process_data(data, &pxstats, &min_ret_stats, STD_THRESHOLD);
         LOG(params,CALLED,MAIN,"process_data() has been called");
+        n_good_ticks=pxstats.NumDataValues();
+        n_bad_ticks=data.size()-n_good_ticks;
+        cum_n_bad_ticks +=n_bad_ticks;
+        cum_n_good_ticks +=n_good_ticks;
         compute_t.end();
-
-//        LOG(params,DIAGNOSTIC,MAIN,"outputing bad ticks vector");
-//        for (size_t t =0; t<bad_ticks.size();++t){
-//            cout<<bad_ticks[t]->toString()<<endl;
-//        }
 
 		// write data
         LOG(params,DIAGNOSTIC,MAIN,"starting to write data");
         write_t.start();
         // prepare buffer with data
-        unsigned long size = (APPROX_LINE_LENS * bad_ticks.size() + overlap) * sizeof(char);
-        char *ptr_write=(char*) malloc(size); // +1 to keep '\0' character to define where we ended
-        size_t write_length=0;
-        for (size_t t =0; t<bad_ticks.size();++t){
-            size_t line_len= bad_ticks[t]->end - bad_ticks[t]->beg;
-            strncpy(ptr_write+write_length, bad_ticks[t]->beg, line_len);
-            write_length+=line_len;
+        char *ptr_write_noise =(char*) malloc((APPROX_LINE_LENS * n_bad_ticks + overlap) * sizeof(char)); // +1 to keep '\0' character to define where we ended
+        char *ptr_write_signals =(char*) malloc((APPROX_LINE_LENS * n_good_ticks + overlap) * sizeof(char)); // +1 to keep '\0' character to define where we ended
+        unsigned long write_noise_length =0,write_signal_length =0;
+        for (unsigned long t =0; t<data.size();++t){
+            size_t line_len= data[t].end - data[t].beg;
+            if (data[t].status==BAD){
+                strncpy(ptr_write_noise + write_noise_length, data[t].beg, line_len);
+                write_noise_length +=line_len;
+            }
+            else{
+                strncpy(ptr_write_signals + write_signal_length, data[t].beg, line_len);
+                write_signal_length +=line_len;
+            }
         }
-        oerr=MPI_File_write_ordered(out_noise,ptr_write,write_length,MPI_CHAR,&mpi_status);
-        free(ptr_write);
-        write_t.end();
-        LOG(params,DIAGNOSTIC,MAIN,"finished writing data");
+        // MPI write noise
+        oerr=MPI_File_write_ordered(out_noise, ptr_write_noise, write_noise_length, MPI_CHAR, &mpi_status);
+        free(ptr_write_noise);
         if (oerr){
-            if (mpi_rank==0) cout<<"Couldn't write to noise.txt. Err code: "<<oerr ;
+            if (mpi_rank==0) cout<<"Couldn't write to "<<fname_noise<< ". Err code: "<<oerr ;
             MPI_Finalize();
             exit(0);
         }
+        // MPI write signal
+        oerr=MPI_File_write_ordered(out_signal, ptr_write_signals, write_signal_length, MPI_CHAR, &mpi_status);
+        free(ptr_write_signals);
+        if (oerr){
+            if (mpi_rank==0) cout<<"Couldn't write to "<<fname_signal<<". Err code: "<<oerr ;
+            MPI_Finalize();
+            exit(0);
+        }
+        write_t.end();
+        LOG(params,DIAGNOSTIC,MAIN,"finished writing data");
 	}
-    LOG(params,DIAGNOSTIC,MAIN,to_string(mpi_rank)," num of good ticks: ",to_string(n_good_ticks));
+    LOG(params,DIAGNOSTIC,MAIN,to_string(mpi_rank)," num of good ticks: ",to_string(cum_n_good_ticks));
     LOG(params, DIAGNOSTIC, MAIN, "mean: ", to_string(pxstats.Mean()), " std: ", to_string(pxstats.StandardDeviation()));
     LOG(params, DIAGNOSTIC, MAIN, "skewness: ", to_string(min_ret_stats.Skewness()), " kurtosis: ", to_string(min_ret_stats.Kurtosis()));
     double excess_kurtosis= min_ret_stats.Kurtosis();//if this very different from zero - distribution is not normal
@@ -184,10 +203,10 @@ int main (int argc, char *argv[])
     MPI_Reduce(&parse_t.d_time,&m_parse_t,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
     MPI_Reduce(&compute_t.d_time,&m_compute_t,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
     MPI_Reduce(&write_t.d_time,&m_write_t,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
-    MPI_Reduce(&n_bad_ticks,&t_n_bad_ticks,1,MPI_UNSIGNED_LONG,MPI_SUM,0,MPI_COMM_WORLD);
+    MPI_Reduce(&cum_n_bad_ticks, &t_n_bad_ticks, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
     MPI_Reduce(&excess_kurtosis,&a_kurtosis,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
     MPI_Reduce(&n_min_samples,&t_n_min_samples,1,MPI_UNSIGNED_LONG,MPI_SUM,0,MPI_COMM_WORLD);
-    MPI_Reduce(&n_good_ticks,&t_n_good_ticks,1,MPI_UNSIGNED_LONG,MPI_SUM,0,MPI_COMM_WORLD);
+    MPI_Reduce(&cum_n_good_ticks, &t_n_good_ticks, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
     a_kurtosis/=mpi_size;
 
     // output to log
@@ -199,21 +218,21 @@ int main (int argc, char *argv[])
         LOG(params,RESULT,MAIN,"Total # of good ticks: ",to_string(t_n_good_ticks));
         LOG(params,RESULT,MAIN,"Total # of bad ticks: ",to_string(t_n_bad_ticks));
         // since each mpi process looks at approximately the same amount of data,
-        // we can simply average the numbers for running statistics like kurtosis (because delta~0)
+        // we can simply average the numbers for running statistics like kurtosis (because delta~=0)
         // using approximate upper bound for sample kurtosis of 24/n (from https://en.wikipedia.org/wiki/Kurtosis#Sample_kurtosis)
         LOG(params,RESULT,MAIN,"Excess Kurtosis: ",to_string(a_kurtosis),", # of 1min samples: ",to_string(t_n_min_samples));
         string normality_verdict;
-        a_kurtosis>24/(t_n_min_samples/mpi_size) ? normality_verdict="Distribution of 1 min returns is NOT normal" : "Distribution of 1 min returns is normal";
+        if (fabs(a_kurtosis)>24/(t_n_min_samples/mpi_size))
+            normality_verdict="Distribution of 1 min returns is NOT normal";
+        else
+            normality_verdict="Distribution of 1 min returns is normal";
         LOG(params,RESULT,MAIN,normality_verdict);
     }
-
 	MPI_Finalize();
-
 	return 0;
 }
 
-void process_data(vector<Tick> &tick_data, RunningStat *pxstats, RunningStat *mRstats, vector<Tick *> &bad_ticks,
-                  float std_threshold) {
+void process_data(vector<Tick> &tick_data, RunningStat *pxstats, RunningStat *mRstats, float std_threshold) {
     pxstats->Clear(); // since we don't look at consecutive data chunks, price after gaps can be very different
     sort(tick_data.begin(),tick_data.end());
     //stats for sampling - we going to sample approximately every minute by just taking the first tick when minute value changes
@@ -265,7 +284,7 @@ void process_data(vector<Tick> &tick_data, RunningStat *pxstats, RunningStat *mR
             // mark tick as bad
             tick_data[t].status=BAD;
 //            cout<<"++++adding to bad_ticks "<<tick_data[t].toString()<<endl;
-            bad_ticks.push_back(&tick_data[t]);
+//            bad_ticks.push_back(&tick_data[t]);
         }
     }
 }
