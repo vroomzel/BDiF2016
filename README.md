@@ -5,10 +5,10 @@
 ### On Penzia, need to load higher version of g++
 
 
-<a.ginzburg@penzias:A> module load g++/4.7
-<a.ginzburg@penzias:A> module unload openmpi
-<a.ginzburg@penzias:A> module load openmpi/1.8.4_gcc
-<a.ginzburg@penzias:A> mpic++ -v
+<a.ginzburg@penzias:A> `module load g++/4.7`
+<a.ginzburg@penzias:A> `module unload openmpi`
+<a.ginzburg@penzias:A> `module load openmpi/1.8.4_gcc`
+<a.ginzburg@penzias:A> `mpic++ -v`
 Using built-in specs.
 COLLECT_GCC=/opt/centos/devtoolset-1.0/root/usr/bin//g++
 COLLECT_LTO_WRAPPER=/opt/centos/devtoolset-1.0/root/usr/libexec/gcc/x86_64-redhat-linux/4.7.0/lto-wrapper
@@ -20,8 +20,8 @@ gcc version 4.7.0 20120507 (Red Hat 4.7.0-5) (GCC)
 ### Now build and run program
 
 1. Build executable:
-... `make all`
+ `make all`
 2. Specify path to input/output files in params.txt
 3. (Optional) Adjust memory usage in params.txt by changing  -io_memory parameter (in bytes). Set it to 1/3 of total available memory that this program is allowed to use.
 4. Start an mpi run:
-... `mpirun -n 16 main.x params.txt`
+ `mpirun -n 16 main.x params.txt`
