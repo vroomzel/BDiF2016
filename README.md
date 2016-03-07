@@ -5,10 +5,10 @@
 ### On Penzia, need to load higher version of g++
 
 
-1.`module load g++/4.7`
-2.`module unload openmpi`
-3.`module load openmpi/1.8.4_gcc`
-4.`mpic++ -v`
+1. `module load g++/4.7`
+2. `module unload openmpi`
+3. `module load openmpi/1.8.4_gcc`
+... `mpic++ -v`
 Using built-in specs.
 COLLECT_GCC=/opt/centos/devtoolset-1.0/root/usr/bin//g++
 COLLECT_LTO_WRAPPER=/opt/centos/devtoolset-1.0/root/usr/libexec/gcc/x86_64-redhat-linux/4.7.0/lto-wrapper
