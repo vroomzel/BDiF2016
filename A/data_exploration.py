@@ -22,6 +22,10 @@ df.columns=['px','vol']
 df.index.name='dt'
 
 
+df.sort(inplace=True)
+mindf=df.px.resample('1Min',how='ohlc').dropna()
+mindf.close.pct_change().hist()
+
 df.px.describe()
 df.vol.describe()
 df.ix[(df.px.abs()<3000) | (df.px!=0)].px.plot()

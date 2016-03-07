@@ -1,0 +1,13 @@
+# Parameters for Scrub program
+
+# files
+-data /home/alex/hgdev/gits/BDiF2016/A/data/signal.txt
+-input /home/alex/hgdev/gits/BDiF2016/A/data/data.txt
+-noise /home/alex/hgdev/gits/BDiF2016/A/data/noise.txt
+
+# Input/output memory available to the program in bites (#of Gb * 1024 *1024 *1024)
+# set it to about a third of total memory to be safe
+-io_memory 2147483648
+
+# acceptable price deviation (in standard deviations from the mean price)
+-price_std 3

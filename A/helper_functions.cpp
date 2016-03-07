@@ -37,7 +37,7 @@ vector<string> parse_string (const string str,const char delimiter){
     int cutAt;
     string line = str;
     vector<string> datas;
-    while( (cutAt = line.find_first_of(",")) != line.npos )
+    while( (cutAt = line.find_first_of(delimiter)) != line.npos )
     {
         if(cutAt > 0)
         {

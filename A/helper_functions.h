@@ -18,4 +18,6 @@ using namespace std;
 
 double getTimestampFromDateTime(string strDateTime);
 
+vector<string> parse_string (const string str,const char delimiter);
+
 #endif //BDIF2016_HELPER_FUNCTIONS_H

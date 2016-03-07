@@ -10,7 +10,7 @@ const short int OUTPUT_PRECISION=17;
 //constructors
 Tick::Tick(){};
 
-string Tick::toString() {
+string Tick::toString() const {
     stringstream out;
     out.precision(OUTPUT_PRECISION);
     out << "Date: " << this->date << " H: " << this->hour << " M: " << this->minute<<" S: "<<this->second

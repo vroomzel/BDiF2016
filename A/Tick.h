@@ -40,7 +40,7 @@ public:
 //    Tick(char* datac);
 
     //methods
-    string toString();
+    string toString() const;
 
     //operator overloads
     bool operator < (const Tick&) const;
