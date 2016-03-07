@@ -1,8 +1,8 @@
 # BDiF2016
 
-Assignment A
+## Assignment A
 
-On Penzia, need to load higher version of g++
+### On Penzia, need to load higher version of g++
 
 
 <a.ginzburg@penzias:A> module load g++/4.7
@@ -17,11 +17,11 @@ Configured with: ../configure --prefix=/opt/centos/devtoolset-1.0/root/usr --man
 Thread model: posix
 gcc version 4.7.0 20120507 (Red Hat 4.7.0-5) (GCC) 
 
-Now build and run program
+### Now build and run program
 
 1. Build executable:
-  make all
+..*make all
 2. Specify path to input/output files in params.txt
 3. (Optional) Adjust memory usage in params.txt by changing  -io_memory parameter (in bytes). Set it to 1/3 of total available memory that this program is allowed to use.
 4. Start an mpi run:
-  mpirun -n 16 main.x params.txt
+..*mpirun -n 16 main.x params.txt
