@@ -25,4 +25,4 @@ gcc version 4.7.0 20120507 (Red Hat 4.7.0-5) (GCC)
 2. Specify path to input/output files in params.txt
 3. (Optional) Adjust memory usage in params.txt by changing  **-io_memory** parameter (in bytes). Set it to 1/3 of total available memory that this program is allowed to use.
 4. Start an mpi run:
- `mpirun -n 16 main.x params.txt`
+ `mpirun -n 16 main.x params.txt > log.txt 2>&1`
